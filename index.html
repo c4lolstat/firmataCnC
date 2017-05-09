@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>CNC Controller</title>
+
+    <link href="css/reset.css" rel="stylesheet">
+    <link href="less/main.less" type="text/css" rel="stylesheet/less">
+
+    <script src="resources/underscore.js" type="application/javascript"></script>
+    <script src="resources/jquery.js" type="application/javascript"></script>
+    <script src="resources/backbone.js" type="application/javascript"></script>
+    <script src="resources/backbone.marionette.js" type="application/javascript"></script>
+    <script src="resources/handlebars.js" type="application/javascript"></script>
+    <script src="resources/socketio.js" type="application/javascript"></script>
+    <script src="resources/less.js" type="application/javascript"></script>
+
+    <script src="controller.js" type="application/javascript"></script>
+
+    <script src="layouts/MainLayout.js" type="application/javascript"></script>
+    <script src="layouts/JobLayout.js" type="application/javascript"></script>
+
+    <script src="views/OffsetView.js" type="application/javascript"></script>
+    <script src="views/OpenFileView.js" type="application/javascript"></script>
+    <script src="views/NullPointView.js" type="application/javascript"></script>
+    <script src="views/StartView.js" type="application/javascript"></script>
+
+    <script src="models/JobModel.js" type="application/javascript"></script>
+
+</head>
+<body lang="en">
+<div id="header"></div>
+<div id="content"></div>
+<div id="footer"></div>
+
+<!--TODO add check to start view-->
+
+<script>
+
+    controller.start();
+
+    $(document).ready(function () {
+        controller.templates.main = Handlebars.compile($("#mainLayout-template").html());
+        controller.templates.job = Handlebars.compile($("#jobLayout-template").html());
+        controller.templates.offset = Handlebars.compile($('#offset-template').html());
+        controller.templates.file = Handlebars.compile($('#file-template').html());
+        controller.templates.nullPoint = Handlebars.compile($('#nullPoint-template').html());
+        controller.templates.start = Handlebars.compile($('#start-template').html());
+
+        var jobModel = new controller.models.JobModel();
+
+        var main = new controller.layouts.MainLayout({template: controller.templates.main});
+        var job = new controller.layouts.JobLayout({template: controller.templates.job});
+        var offset = new controller.views.OffsetView({template: controller.templates.offset, model: jobModel});
+        var file = new controller.views.OpenFileView({template: controller.templates.file, model: jobModel});
+        var nullPoint = new controller.views.NullPointView({template: controller.templates.nullPoint, model: jobModel});
+        var start = new controller.views.StartView({template: controller.templates.start, model: jobModel});
+
+        controller.content.show(main);
+
+        main.getRegion('mill').show(job);
+        job.getRegion('offset').show(offset);
+        job.getRegion('file').show(file);
+        job.getRegion('nullpoint').show(nullPoint);
+        job.getRegion('start').show(start);
+
+        controller.socket.on('answare', function (data) {
+            var tmpNullPoint = data.split(',')[2];
+            jobModel.set('tmpNullPoint', tmpNullPoint.slice(0, 5));
+        });
+
+        controller.socket.on('allSteps', function (data) {
+            jobModel.set('started', true, 'silent');
+            jobModel.set('allSteps', data, 'silent');
+        });
+
+        controller.socket.on('step', function () {
+            jobModel.set('stepsDone', jobModel.get('stepsDone') + 1);
+        });
+
+        controller.socket.on('finished', function (data) {
+            jobModel.set('stepsDone',0);
+            jobModel.set('allDone',0);
+            jobModel.set('started', false);
+        });
+
+//        controller.socket.on('news', function (data) {
+//            console.log(data);
+//            controller.socket.emit('my other event', { my: 'data' });
+//        });
+
+    });
+
+</script>
+
+<script id="mainLayout-template" type="text/x-handlebars-template">
+    <div class="content">
+        <div class="Row">
+            <div class="Cell header" id="headerMill">Plot</div>
+        </div>
+        <div class="Row">
+            <div class="Cell item" id="mill"></div>
+        </div>
+    </div>
+</script>
+
+<script id="jobLayout-template" type="text/x-handlebars-template">
+    <div class="inner">
+        <div id="offset"></div>
+        <div id="file"></div>
+        <div id="nullpoint"></div>
+        <div id="start"></div>
+    </div>
+</script>
+
+<script id="offset-template" type="text/x-handlebars-template">
+    <div class="element">
+        <span>Set the workplane's offset</span><br/>
+        <select id="selectOffset">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+        </select>
+        <span> quadrant</span><br/>
+    </div>
+</script>
+
+<script id="file-template" type="text/x-handlebars-template">
+    <div class="element">
+        <span>Select the plot file: </span><br/>
+        <span>File name: </span><span>{{fileName}}</span><br/>
+        <input type="file" id="fileInput"/><br/>
+    </div>
+</script>
+
+<script id="nullPoint-template" type="text/x-handlebars-template">
+    <div class="element">
+        <span>Set the tool null point: </span><br/>
+        <span>Current position: </span><span>{{tmpNullPoint}} mm</span>
+
+        <div class="Row">
+            <div class="Cell">
+                <input type="button" id="moveUp" value="UP"/>
+            </div>
+            <div class="Cell">
+                <input type="button" id="moveDown" value="DOWN"/>
+            </div>
+        </div>
+        <div class="Row">
+            <div class="Cell">
+                <input type="button" id="moveUpTen" value="UP x10"/>
+            </div>
+            <div class="Cell">
+                <input type="button" id="moveDownTen" value="DOWN x10"/>
+            </div>
+        </div>
+    </div>
+</script>
+
+<script id="start-template" type="text/x-handlebars-template">
+    <div class="element">
+        {{#if started}}
+        <progress max="{{allSteps}}" value="{{stepsDone}}"></progress>
+        <span>{{stepsDone}}/{{allSteps}}</span>
+        {{else}}
+        <div class="middle">
+            <div class="Row">
+                <div class="Cell">
+                    <input type="button" id="resetButton" value="Reset"/>
+                </div>
+                <div class="Cell">
+                    <input type="button" id="startButton" value="Start"/>
+                </div>
+            </div>
+        </div>
+        {{/if}}
+    </div>
+</script>
+</body>
+</html>

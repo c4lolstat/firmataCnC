@@ -1,0 +1,12 @@
+.Row {
+    display: table-row;
+}
+.Cell {
+    display: table-cell;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+.error{
+    color:red;
+}
